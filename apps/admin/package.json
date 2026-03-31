@@ -21,6 +21,7 @@
     "postcss": "^8",
     "eslint": "^8",
     "eslint-config-next": "14.0.0",
-    "@karyo/event-system": "file:../../packages/event-system"
+    "@karyo/event-system": "file:../../packages/event-system",
+    "@karyo/agent-system": "file:../../packages/agent-system"
   }
 }

@@ -1,5 +1,12 @@
 import { NextResponse } from 'next/server';
 import { createDefaultEventSystem, Event } from '@karyo/event-system';
+import {
+  AgentRegistry,
+  AgentDispatcher,
+  DefaultAIAPI,
+  InMemoryAPI,
+  UserInputAgent,
+} from '@karyo/agent-system';
 
 export type EventItem = {
   id: string;
@@ -10,7 +17,27 @@ export type EventItem = {
 
 export let eventStore: EventItem[] = [];
 
-const { bus } = createDefaultEventSystem();
+const { bus, registry } = createDefaultEventSystem();
+
+// Replace default low-level USER_INPUT handler in event system with agent-driven behavior.
+registry.unregister('USER_INPUT');
+
+const agentRegistry = new AgentRegistry();
+agentRegistry.registerAgent(new UserInputAgent());
+
+const memoryApi = new InMemoryAPI();
+const aiApi = new DefaultAIAPI();
+
+const agentDispatcher = new AgentDispatcher({
+  registry: agentRegistry,
+  memory: memoryApi,
+  ai: aiApi,
+  bus,
+});
+
+bus.subscribe('USER_INPUT', async (event) => {
+  await agentDispatcher.dispatch(event);
+});
 
 const toEvent = (type: string, payload: any): EventItem => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,

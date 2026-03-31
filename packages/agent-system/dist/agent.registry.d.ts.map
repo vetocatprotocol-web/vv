@@ -1,0 +1,1 @@
+{"version":3,"file":"agent.registry.d.ts","sourceRoot":"","sources":["../src/agent.registry.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,KAAK,EAAE,MAAM,eAAe,CAAC;AACtC,OAAO,EAAE,KAAK,EAAE,MAAM,qBAAqB,CAAC;AAE5C,qBAAa,aAAa;IACxB,OAAO,CAAC,MAAM,CAAe;IAE7B,aAAa,CAAC,KAAK,EAAE,KAAK,GAAG,IAAI;IAOjC,iBAAiB,CAAC,KAAK,EAAE,KAAK,GAAG,KAAK,EAAE;IAWxC,UAAU,IAAI,MAAM,EAAE;CAGvB"}
