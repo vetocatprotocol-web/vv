@@ -4,6 +4,8 @@ import { Event, EventBusInterface, EventHandler, EventMetadata, EventType } from
 export class EventBus implements EventBusInterface {
   private handlers: Map<EventType, Set<EventHandler>> = new Map();
 
+  private allHandlers: Set<EventHandler> = new Set();
+
   publish(event: Event): Promise<void> {
     const normalized = this.normalizeEvent(event);
 
@@ -12,7 +14,7 @@ export class EventBus implements EventBusInterface {
     // Fire-and-forget async processing of handlers
     setTimeout(() => {
       void Promise.all(
-        handlers.map((handler) =>
+        [...handlers, ...this.allHandlers].map((handler) =>
           handler(normalized, this).catch((error) => {
             console.error(`[event-system] handler failed for ${normalized.type}:`, error);
           }),
@@ -44,6 +46,18 @@ export class EventBus implements EventBusInterface {
     if (handlers.size === 0) {
       this.handlers.delete(eventType);
     }
+  }
+
+  subscribeAll(handler: EventHandler): void {
+    this.allHandlers.add(handler);
+  }
+
+  unsubscribeAll(handler?: EventHandler): void {
+    if (!handler) {
+      this.allHandlers.clear();
+      return;
+    }
+    this.allHandlers.delete(handler);
   }
 
   private normalizeEvent(event: Event): Event {

@@ -5,13 +5,14 @@ const crypto_1 = require("crypto");
 class EventBus {
     constructor() {
         this.handlers = new Map();
+        this.allHandlers = new Set();
     }
     publish(event) {
         const normalized = this.normalizeEvent(event);
         const handlers = Array.from(this.handlers.get(normalized.type) || []);
         // Fire-and-forget async processing of handlers
         setTimeout(() => {
-            void Promise.all(handlers.map((handler) => handler(normalized, this).catch((error) => {
+            void Promise.all([...handlers, ...this.allHandlers].map((handler) => handler(normalized, this).catch((error) => {
                 console.error(`[event-system] handler failed for ${normalized.type}:`, error);
             })));
         }, 0);
@@ -35,6 +36,16 @@ class EventBus {
         if (handlers.size === 0) {
             this.handlers.delete(eventType);
         }
+    }
+    subscribeAll(handler) {
+        this.allHandlers.add(handler);
+    }
+    unsubscribeAll(handler) {
+        if (!handler) {
+            this.allHandlers.clear();
+            return;
+        }
+        this.allHandlers.delete(handler);
     }
     normalizeEvent(event) {
         const timestamp = event.metadata?.timestamp || Date.now();

@@ -15,6 +15,8 @@ export interface EventBusInterface {
     publish(event: Event): Promise<void>;
     subscribe(eventType: EventType, handler: EventHandler): void;
     unsubscribe(eventType: EventType, handler?: EventHandler): void;
+    subscribeAll(handler: EventHandler): void;
+    unsubscribeAll(handler?: EventHandler): void;
 }
 export type EventHandler = (event: Event, bus: EventBusInterface) => Promise<void>;
 //# sourceMappingURL=event.types.d.ts.map

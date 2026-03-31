@@ -1,8 +1,8 @@
 "use client";
 
 import * as React from 'react';
-import { useEvents } from '../lib/hooks';
-import { fetchEvents, postEvent } from '../lib/api';
+import { useEventStream } from '../lib/useEventStream';
+import { postEvent } from '../lib/api';
 
 import OverviewPanel from './components/overview/OverviewPanel';
 import SystemConfigPanel from './config/SystemConfigPanel';
@@ -11,11 +11,13 @@ import EventControlPanel from './events/EventControlPanel';
 import AIControlPanel from './ai/AIControlPanel';
 import MemoryControlPanel from './memory/MemoryControlPanel';
 import ActivityLogsPanel from './components/logs/ActivityLogsPanel';
+import EventFeed from './components/realtime/EventFeed';
+import AgentActivity from './components/realtime/AgentActivity';
 
 const knownAgents = ['UserInputAgent', 'SystemConfigAgent', 'AIConfigAgent', 'AgentManagementAgent', 'MemoryAgent'];
 
 export default function HomePage() {
-  const { events, loading, error, reload } = useEvents(3000);
+  const { events, running, error, reload } = useEventStream();
   const [activeTab, setActiveTab] = React.useState('overview');
   const [agentStatuses, setAgentStatuses] = React.useState<Record<string, string>>({});
   const [systemConfig, setSystemConfig] = React.useState<Record<string, any>>({});
@@ -54,6 +56,10 @@ export default function HomePage() {
           <div>
             <h1 className="text-3xl font-bold">KARYO OS Super Admin Dashboard</h1>
             <p className="text-slate-600">Central control plane (layer 1-5), event-driven, no direct state mutation.</p>
+            <p className="text-sm mt-1">
+              Real-Time Stream: {running ? <span className="font-semibold text-green-600">Connected</span> : <span className="font-semibold text-red-600">Disconnected</span>}
+              {error ? <span className="text-sm text-red-500"> — {error}</span> : null}
+            </p>
           </div>
           <div className="flex gap-2">
             <button
@@ -94,12 +100,18 @@ export default function HomePage() {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2">
             {activeTab === 'overview' && (
-              <OverviewPanel
-                events={events}
-                config={systemConfig}
-                aiConfig={aiConfig}
-                agentStatus={agentStatuses}
-              />
+              <div className="space-y-4">
+                <OverviewPanel
+                  events={events}
+                  config={systemConfig}
+                  aiConfig={aiConfig}
+                  agentStatus={agentStatuses}
+                />
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <EventFeed events={events} />
+                  <AgentActivity events={events} />
+                </div>
+              </div>
             )}
             {activeTab === 'config' && <SystemConfigPanel onUpdate={() => void reload()} />}
             {activeTab === 'agents' && (
@@ -112,7 +124,7 @@ export default function HomePage() {
             {activeTab === 'events' && <EventControlPanel onTrigger={() => void reload()} />}
             {activeTab === 'ai' && <AIControlPanel onUpdate={() => void reload()} />}
             {activeTab === 'memory' && <MemoryControlPanel onDone={() => void reload()} />}
-            {activeTab === 'logs' && <ActivityLogsPanel events={events} loading={loading} error={error} />}
+            {activeTab === 'logs' && <ActivityLogsPanel events={events} loading={running} error={error} />}
           </div>
 
           <aside className="lg:col-span-1 space-y-4">

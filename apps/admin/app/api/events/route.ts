@@ -21,7 +21,7 @@ export type EventItem = {
 
 export let eventStore: EventItem[] = [];
 
-const { bus, registry } = createDefaultEventSystem();
+export const { bus, registry } = createDefaultEventSystem();
 
 // Replace default low-level USER_INPUT handler in event system with agent-driven behavior.
 registry.unregister('USER_INPUT');

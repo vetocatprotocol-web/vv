@@ -1,6 +1,7 @@
 {
   "/_not-found": "app/_not-found.js",
   "/api/events/latest/route": "app/api/events/latest/route.js",
-  "/api/events/route": "app/api/events/route.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/api/events/stream/route": "app/api/events/stream/route.js",
+  "/api/events/route": "app/api/events/route.js"
 }
