@@ -1,17 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DefaultAIAPI = void 0;
-const ai_core_1 = require("@karyo/ai-core");
-// Simple wrapper around AI core as an abstraction layer. In production, connect to LLM providers.
+const ai_system_1 = require("@karyo/ai-system");
 class DefaultAIAPI {
-    constructor(contextBuilder = new ai_core_1.ContextBuilder()) {
-        this.contextBuilder = contextBuilder;
+    constructor(service = new ai_system_1.AIService()) {
+        this.service = service;
     }
-    async generateText(prompt, context) {
-        // placeholder for actual AI call; it may use model router + prompt orchestrator in later iterations.
-        const contextSuffix = context ? `\n\nContext:\n${context}` : '';
-        const formatted = `Assistant response to: "${prompt}"${contextSuffix}`;
-        return Promise.resolve(formatted);
+    async generateText(request) {
+        return this.service.generateText(request);
+    }
+    // backward-compatible helper for old signature
+    async generateTextLegacy(prompt, context) {
+        const result = await this.service.generateText({ prompt, context });
+        return result.text;
     }
 }
 exports.DefaultAIAPI = DefaultAIAPI;

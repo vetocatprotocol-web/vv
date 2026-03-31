@@ -13,6 +13,10 @@ export class InMemoryAPI implements MemoryAPI {
     this.store.set(key, value);
   }
 
+  async delete(key: string): Promise<void> {
+    this.store.delete(key);
+  }
+
   async query(filter: Record<string, any>): Promise<any[]> {
     const matches: any[] = [];
     for (const [key, value] of this.store.entries()) {

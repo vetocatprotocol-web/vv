@@ -28,16 +28,22 @@ class UserInputAgent extends base_agent_1.BaseAgent {
         const contextPayload = Array.isArray(userContext)
             ? userContext.join('\n')
             : userContext || '';
-        const aiText = await context.ai.generateText(aiPrompt, contextPayload);
+        const aiResponse = await context.ai.generateText({
+            prompt: aiPrompt,
+            context: contextPayload,
+            temperature: 0.7,
+            maxTokens: 256,
+        });
         await this.respond(context, {
-            text: aiText,
+            text: aiResponse.text,
             original: text,
             generatedAt: Date.now(),
+            raw: aiResponse.raw,
         });
         // maintain memory provenance
         await context.memory.write(`last_user_input`, {
             text,
-            aiText,
+            aiText: aiResponse.text,
             timestamp: Date.now(),
         });
     }

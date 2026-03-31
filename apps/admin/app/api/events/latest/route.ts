@@ -34,11 +34,11 @@ export async function GET() {
     }
   }
 
-  const latest = eventStore.find((e: EventItem) => e.type === "AGENT_OUTPUT")
+  const latest = eventStore.find((e: EventItem) => e.type === 'AGENT_RESPONSE' || e.type === 'AGENT_OUTPUT');
 
   if (!latest) {
-    return new NextResponse(null, { status: 204 })
+    return new NextResponse(null, { status: 204 });
   }
 
-  return NextResponse.json(latest)
+  return NextResponse.json(latest);
 }

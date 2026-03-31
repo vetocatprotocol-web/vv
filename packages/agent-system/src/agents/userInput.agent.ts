@@ -46,7 +46,7 @@ export class UserInputAgent extends BaseAgent {
     // maintain memory provenance
     await context.memory.write(`last_user_input`, {
       text,
-      aiText,
+      aiText: aiResponse.text,
       timestamp: Date.now(),
     });
   }

@@ -11,6 +11,9 @@ class InMemoryAPI {
     async write(key, value) {
         this.store.set(key, value);
     }
+    async delete(key) {
+        this.store.delete(key);
+    }
     async query(filter) {
         const matches = [];
         for (const [key, value] of this.store.entries()) {

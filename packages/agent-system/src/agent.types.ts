@@ -4,6 +4,7 @@ import { AIAPI as AIServiceAPI } from '@karyo/ai-system';
 export interface MemoryAPI {
   read(key: string): Promise<any | null>;
   write(key: string, value: any): Promise<void>;
+  delete?(key: string): Promise<void>;
   query?(filter: Record<string, any>): Promise<any[]>;
 }
 

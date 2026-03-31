@@ -6,6 +6,10 @@ import {
   DefaultAIAPI,
   InMemoryAPI,
   UserInputAgent,
+  SystemConfigAgent,
+  AIConfigAgent,
+  AgentManagementAgent,
+  MemoryAgent,
 } from '@karyo/agent-system';
 
 export type EventItem = {
@@ -24,6 +28,10 @@ registry.unregister('USER_INPUT');
 
 const agentRegistry = new AgentRegistry();
 agentRegistry.registerAgent(new UserInputAgent());
+agentRegistry.registerAgent(new SystemConfigAgent());
+agentRegistry.registerAgent(new AIConfigAgent());
+agentRegistry.registerAgent(new AgentManagementAgent());
+agentRegistry.registerAgent(new MemoryAgent());
 
 const memoryApi = new InMemoryAPI();
 const aiApi = new DefaultAIAPI();
@@ -38,6 +46,41 @@ const agentDispatcher = new AgentDispatcher({
 bus.subscribe('USER_INPUT', async (event) => {
   await agentDispatcher.dispatch(event);
 });
+
+const addEventToStore = (event: import('@karyo/event-system').Event) => {
+  const eventItem: EventItem = {
+    id: event.id,
+    type: event.type,
+    payload: event.payload,
+    createdAt: new Date(event.metadata?.timestamp || Date.now()).toISOString(),
+  };
+
+  // keep newest events first
+  eventStore = [eventItem, ...eventStore].slice(0, 500);
+};
+
+const mirrorEventToStore = async (event: import('@karyo/event-system').Event) => {
+  addEventToStore(event);
+};
+
+// Mirror key events from the bus to the local store for dashboard visibility
+const trackedTypes = [
+  'AGENT_RESPONSE',
+  'SYSTEM_CONFIG_UPDATED',
+  'AI_CONFIG_UPDATED',
+  'AGENT_STATUS_UPDATED',
+  'MEMORY_READ_RESULT',
+  'MEMORY_WRITE_RESULT',
+  'MEMORY_DELETE_RESULT',
+  'EVENT_LOG',
+];
+
+for (const type of trackedTypes) {
+  bus.subscribe(type, async (event) => {
+    await mirrorEventToStore(event);
+  });
+}
+
 
 const toEvent = (type: string, payload: any): EventItem => ({
   id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,

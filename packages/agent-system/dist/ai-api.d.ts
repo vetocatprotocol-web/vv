@@ -1,8 +1,9 @@
-import { AIAPI } from './agent.types';
-import { ContextBuilder } from '@karyo/ai-core';
+import { AIAPI, AIRequest, AIResponse } from '@karyo/ai-system';
+import { AIService } from '@karyo/ai-system';
 export declare class DefaultAIAPI implements AIAPI {
-    private contextBuilder;
-    constructor(contextBuilder?: ContextBuilder);
-    generateText(prompt: string, context?: string): Promise<string>;
+    private service;
+    constructor(service?: AIService);
+    generateText(request: AIRequest): Promise<AIResponse>;
+    generateTextLegacy(prompt: string, context?: string): Promise<string>;
 }
 //# sourceMappingURL=ai-api.d.ts.map

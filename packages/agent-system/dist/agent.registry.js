@@ -3,16 +3,30 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AgentRegistry = void 0;
 class AgentRegistry {
     constructor() {
-        this.agents = [];
+        this.agents = new Map();
     }
     registerAgent(agent) {
-        if (this.agents.some((a) => a.name === agent.name)) {
+        if (this.agents.has(agent.name)) {
             return;
         }
-        this.agents.push(agent);
+        this.agents.set(agent.name, { agent, enabled: true });
+    }
+    setAgentEnabled(agentName, enabled) {
+        const record = this.agents.get(agentName);
+        if (!record) {
+            return;
+        }
+        record.enabled = enabled;
+    }
+    isAgentEnabled(agentName) {
+        const record = this.agents.get(agentName);
+        return record?.enabled ?? false;
     }
     getAgentsForEvent(event) {
-        return this.agents.filter((agent) => {
+        return Array.from(this.agents.values())
+            .filter((record) => record.enabled)
+            .map((record) => record.agent)
+            .filter((agent) => {
             try {
                 return agent.canHandle(event);
             }
@@ -23,7 +37,10 @@ class AgentRegistry {
         });
     }
     listAgents() {
-        return this.agents.map((agent) => agent.name);
+        return Array.from(this.agents.entries()).map(([name, record]) => ({
+            name,
+            enabled: record.enabled,
+        }));
     }
 }
 exports.AgentRegistry = AgentRegistry;
