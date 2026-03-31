@@ -1,18 +1,20 @@
-import { AIAPI } from './agent.types';
-import { ContextBuilder } from '@karyo/ai-core';
+import { AIAPI, AIRequest, AIResponse } from '@karyo/ai-system';
+import { AIService } from '@karyo/ai-system';
 
-// Simple wrapper around AI core as an abstraction layer. In production, connect to LLM providers.
 export class DefaultAIAPI implements AIAPI {
-  private contextBuilder: ContextBuilder;
+  private service: AIService;
 
-  constructor(contextBuilder: ContextBuilder = new ContextBuilder()) {
-    this.contextBuilder = contextBuilder;
+  constructor(service: AIService = new AIService()) {
+    this.service = service;
   }
 
-  async generateText(prompt: string, context?: string): Promise<string> {
-    // placeholder for actual AI call; it may use model router + prompt orchestrator in later iterations.
-    const contextSuffix = context ? `\n\nContext:\n${context}` : '';
-    const formatted = `Assistant response to: "${prompt}"${contextSuffix}`;
-    return Promise.resolve(formatted);
+  async generateText(request: AIRequest): Promise<AIResponse> {
+    return this.service.generateText(request);
+  }
+
+  // backward-compatible helper for old signature
+  async generateTextLegacy(prompt: string, context?: string): Promise<string> {
+    const result = await this.service.generateText({ prompt, context });
+    return result.text;
   }
 }

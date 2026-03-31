@@ -1,7 +1,7 @@
 {
-  "name": "@karyo/agent-system",
+  "name": "@karyo/ai-system",
   "version": "1.0.0",
-  "description": "Agent execution layer for KARYO OS",
+  "description": "AI abstraction layer for KARYO OS",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
@@ -9,12 +9,7 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts"
   },
-  "dependencies": {
-    "@karyo/ai-core": "file:../ai-core",
-    "@karyo/ai-system": "file:../ai-system",
-    "@karyo/event-system": "file:../event-system",
-    "@karyo/memory": "file:../memory"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/jest": "^29.5.0",
     "@types/node": "^20",

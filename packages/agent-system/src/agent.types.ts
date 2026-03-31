@@ -1,4 +1,5 @@
 import { Event } from '@karyo/event-system';
+import { AIAPI as AIServiceAPI } from '@karyo/ai-system';
 
 export interface MemoryAPI {
   read(key: string): Promise<any | null>;
@@ -6,9 +7,7 @@ export interface MemoryAPI {
   query?(filter: Record<string, any>): Promise<any[]>;
 }
 
-export interface AIAPI {
-  generateText(prompt: string, context?: string): Promise<string>;
-}
+export type AIAPI = AIServiceAPI;
 
 export interface AgentContext {
   event: Event;
