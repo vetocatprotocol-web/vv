@@ -24,6 +24,7 @@ const system_module_1 = require("./modules/system/system.module");
 const marketplace_module_1 = require("./modules/marketplace/marketplace.module");
 const observability_module_1 = require("./modules/observability/observability.module");
 const command_module_1 = require("./modules/command/command.module");
+const data_analyst_module_1 = require("./modules/data-analyst/data-analyst.module");
 let AppModule = class AppModule {
 };
 exports.AppModule = AppModule;
@@ -46,6 +47,7 @@ exports.AppModule = AppModule = __decorate([
             marketplace_module_1.MarketplaceModule,
             observability_module_1.ObservabilityModule,
             command_module_1.CommandModule,
+            data_analyst_module_1.DataAnalystModule,
         ],
     })
 ], AppModule);

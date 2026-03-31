@@ -3,6 +3,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { io, Socket } from 'socket.io-client';
+import TaskInput from '@/components/ai/TaskInput';
+import ExecutionTimeline from '@/components/ai/ExecutionTimeline';
+import AIControlPanel from '@/components/ai/AIControlPanel';
+import AgentStatus from '@/components/ai/AgentStatus';
+import OutputPanel from '@/components/ai/OutputPanel';
+import { IntegrationPanel, IntegrationTool } from '@/components/integrations';
+import { useAIWorkspace } from '@/lib/store';
 
 interface Task {
   id: string;
@@ -41,21 +48,28 @@ interface File {
 }
 
 export default function Dashboard() {
-  const [tasks, setTasks] = useState<Task[]>([]);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [files, setFiles] = useState<File[]>([]);
   const [selectedWorkspace, setSelectedWorkspace] = useState<string>('');
-  const [command, setCommand] = useState('');
-  const [commandMode, setCommandMode] = useState<'manual' | 'agent' | 'hybrid'>('manual');
-  const [selectedAgentForTask, setSelectedAgentForTask] = useState('');
   const [loading, setLoading] = useState(true);
   const [sessionActive, setSessionActive] = useState(false);
   const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
   const [realTimeUpdates, setRealTimeUpdates] = useState<string[]>([]);
   const socketRef = useRef<Socket | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+
+  // AI Workspace store
+  const {
+    addExecutionStep,
+    updateExecutionStep,
+    completeExecution,
+    failExecution,
+    updateAgent,
+    addCost,
+    addResult,
+    currentTask
+  } = useAIWorkspace();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -83,13 +97,31 @@ export default function Dashboard() {
     socketRef.current.on('taskStatusChanged', (data) => {
       console.log('Task status changed:', data);
       setRealTimeUpdates(prev => [...prev, `Task "${data.title}" status: ${data.status} (${data.progress}%)`]);
-      fetchTasks();
+
+      // Update AI workspace state
+      if (data.status === 'running') {
+        addExecutionStep({
+          title: 'Task Execution',
+          description: `Executing: ${data.title}`,
+          status: 'running',
+        });
+      } else if (data.status === 'completed') {
+        updateExecutionStep('step-1', { status: 'completed', output: data.result });
+        completeExecution(data.result ? {
+          id: `result-${Date.now()}`,
+          content: data.result,
+          type: 'text',
+          timestamp: new Date(),
+        } : undefined);
+      }
     });
 
     socketRef.current.on('agentStatusChanged', (data) => {
       console.log('Agent status changed:', data);
       setRealTimeUpdates(prev => [...prev, `Agent "${data.name}" status: ${data.status}`]);
-      fetchAgents();
+
+      // Update agent status in AI workspace
+      updateAgent(data.id, { status: data.status });
     });
 
     fetchWorkspaces();
@@ -103,12 +135,6 @@ export default function Dashboard() {
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (selectedWorkspace) {
-      fetchTasks();
-    }
-  }, [selectedWorkspace]);
 
   const fetchWorkspaces = async () => {
     try {
@@ -127,19 +153,17 @@ export default function Dashboard() {
     }
   };
 
-  const fetchTasks = async () => {
+  const fetchAgents = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/v1/tasks?workspaceId=${selectedWorkspace}`, {
+      const response = await fetch('http://localhost:3001/api/v1/agents', {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
       });
       const data = await response.json();
-      setTasks(data);
+      setAgents(data);
     } catch (error) {
-      console.error('Error fetching tasks:', error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching agents:', error);
     }
   };
 
@@ -160,19 +184,43 @@ export default function Dashboard() {
   const startSession = () => {
     setSessionActive(true);
     setSessionStartTime(new Date());
-    setRealTimeUpdates(prev => [...prev, 'Work session started']);
+    setRealTimeUpdates(prev => [...prev, 'AI Workspace session started']);
   };
 
   const endSession = () => {
     setSessionActive(false);
     setSessionStartTime(null);
-    setRealTimeUpdates(prev => [...prev, 'Work session ended']);
+    setRealTimeUpdates(prev => [...prev, 'AI Workspace session ended']);
   };
 
-  const processCommand = async () => {
-    if (!command.trim()) return;
-
+  const handleTaskSubmit = async (command: string, mode: string, goal?: string, data?: string) => {
     try {
+      // Simulate AI processing steps
+      addExecutionStep({
+        title: 'Command Analysis',
+        description: 'Analyzing your request and determining execution strategy',
+        status: 'running',
+      });
+
+      setTimeout(() => {
+        updateExecutionStep('step-1', { status: 'completed' });
+        addExecutionStep({
+          title: 'Agent Assignment',
+          description: `Assigning ${mode} mode execution`,
+          status: 'running',
+        });
+      }, 1000);
+
+      setTimeout(() => {
+        updateExecutionStep('step-2', { status: 'completed' });
+        addExecutionStep({
+          title: 'Task Execution',
+          description: 'Executing your request with AI assistance',
+          status: 'running',
+        });
+      }, 2000);
+
+      // Simulate API call
       const response = await fetch('http://localhost:3001/api/v1/command/interpret', {
         method: 'POST',
         headers: {
@@ -180,69 +228,38 @@ export default function Dashboard() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
         body: JSON.stringify({
-          command: command,
+          command,
           workspaceId: selectedWorkspace,
-          mode: commandMode,
-          agentId: commandMode === 'agent' ? selectedAgentForTask : null,
+          mode,
+          goal,
+          data,
         }),
       });
 
-      const data = await response.json();
+      const result = await response.json();
+
       if (response.ok) {
-        setRealTimeUpdates(prev => [...prev, `Command processed: ${command}`]);
-        setCommand('');
-        fetchTasks();
+        // Complete execution
+        updateExecutionStep('step-3', {
+          status: 'completed',
+          output: `Task completed successfully: ${result.message || 'Done'}`
+        });
+
+        completeExecution({
+          id: `result-${Date.now()}`,
+          content: result.result || `Successfully executed: ${command}`,
+          type: 'text',
+          timestamp: new Date(),
+          metadata: { mode, goal, data }
+        });
+
+        addCost(0.0025); // Simulate cost
       } else {
-        setRealTimeUpdates(prev => [...prev, `Command failed: ${data.message}`]);
+        failExecution(result.message || 'Task execution failed');
       }
-    } catch (error) {
-      console.error('Error processing command:', error);
-      setRealTimeUpdates(prev => [...prev, 'Command processing failed']);
-    }
-  };
-
-  const uploadFile = async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-    formData.append('workspaceId', selectedWorkspace);
-
-    try {
-      const response = await fetch('http://localhost:3001/api/v1/files/upload', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: formData,
-      });
-
-      if (response.ok) {
-        setRealTimeUpdates(prev => [...prev, `File uploaded: ${file.name}`]);
-        fetchFiles();
-      }
-    } catch (error) {
-      console.error('Error uploading file:', error);
-    }
-  };
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFiles = event.target.files;
-    if (selectedFiles) {
-      Array.from(selectedFiles).forEach(uploadFile);
-    }
-  };
-
-  const executeTask = async (taskId: string) => {
-    try {
-      await fetch(`http://localhost:3001/api/v1/tasks/${taskId}/execute`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      // Refresh tasks after a delay to see status change
-      setTimeout(fetchTasks, 3000);
     } catch (error) {
       console.error('Error executing task:', error);
+      failExecution('Network error occurred');
     }
   };
 
@@ -252,22 +269,32 @@ export default function Dashboard() {
   };
 
   if (loading) {
-    return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+    return (
+      <div className="min-h-screen bg-karyo-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-pulse-cyan text-6xl mb-4">🚀</div>
+          <div className="text-karyo-cyan text-xl font-semibold">Initializing KARYO OS</div>
+          <div className="text-karyo-text-secondary mt-2">Loading AI Workspace...</div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow">
+    <div className="min-h-screen bg-karyo-dark">
+      {/* Header */}
+      <header className="bg-karyo-darker border-b border-karyo-gray-light">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16">
             <div className="flex items-center">
-              <h1 className="text-xl font-bold text-gray-900">KARYO OS</h1>
+              <h1 className="text-2xl font-bold text-karyo-cyan">KARYO OS</h1>
+              <span className="ml-2 text-sm text-karyo-text-secondary">AI-Native Workspace</span>
             </div>
             <div className="flex items-center space-x-4">
               <select
                 value={selectedWorkspace}
                 onChange={(e) => setSelectedWorkspace(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2"
+                className="karyo-input"
               >
                 {workspaces.map((ws) => (
                   <option key={ws.id} value={ws.id}>
@@ -278,21 +305,21 @@ export default function Dashboard() {
               {sessionActive ? (
                 <button
                   onClick={endSession}
-                  className="bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700"
+                  className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
                 >
                   End Session
                 </button>
               ) : (
                 <button
                   onClick={startSession}
-                  className="bg-green-600 text-white px-4 py-2 rounded-md hover:bg-green-700"
+                  className="bg-karyo-cyan text-karyo-dark px-4 py-2 rounded-md hover:bg-karyo-cyan-dark font-medium"
                 >
                   Start Session
                 </button>
               )}
               <button
                 onClick={logout}
-                className="bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700"
+                className="bg-karyo-gray text-karyo-text px-4 py-2 rounded-md hover:bg-karyo-gray-light"
               >
                 Logout
               </button>
@@ -301,231 +328,93 @@ export default function Dashboard() {
         </div>
       </header>
 
-      {/* Command Bar */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex items-center space-x-4">
-            <div className="flex-1">
-              <input
-                type="text"
-                placeholder="Ketik perintah, buat dokumen, atau olah file..."
-                value={command}
-                onChange={(e) => setCommand(e.target.value)}
-                onKeyPress={(e) => e.key === 'Enter' && processCommand()}
-                className="w-full border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-            <select
-              value={commandMode}
-              onChange={(e) => setCommandMode(e.target.value as 'manual' | 'agent' | 'hybrid')}
-              className="border border-gray-300 rounded-md px-3 py-2"
-            >
-              <option value="manual">Mode Manual</option>
-              <option value="agent">Mode Agen</option>
-              <option value="hybrid">Mode Hybrid</option>
-            </select>
-            {commandMode === 'agent' && (
-              <select
-                value={selectedAgentForTask}
-                onChange={(e) => setSelectedAgentForTask(e.target.value)}
-                className="border border-gray-300 rounded-md px-3 py-2"
-              >
-                <option value="">Pilih Agen</option>
-                {agents.map((agent) => (
-                  <option key={agent.id} value={agent.id}>
-                    {agent.name}
-                  </option>
-                ))}
-              </select>
-            )}
-            <button
-              onClick={processCommand}
-              className="bg-blue-600 text-white px-6 py-2 rounded-md hover:bg-blue-700"
-            >
-              Jalankan
-            </button>
-          </div>
-        </div>
-      </div>
-
+      {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            {/* Main Content */}
-            <div className="lg:col-span-2 space-y-6">
-              {/* Session Status */}
-              {sessionActive && sessionStartTime && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="text-sm font-medium text-green-800">Sesi Kerja Aktif</h3>
-                      <p className="text-sm text-green-600">
-                        Dimulai: {sessionStartTime.toLocaleTimeString()}
-                      </p>
-                    </div>
-                    <div className="text-sm text-green-600">
-                      Durasi: {Math.floor((Date.now() - sessionStartTime.getTime()) / 60000)} menit
-                    </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Left Sidebar - AI Control */}
+          <div className="lg:col-span-3 space-y-6">
+            <AIControlPanel />
+            <AgentStatus />
+          </div>
+
+          {/* Main Content Area */}
+          <div className="lg:col-span-6 space-y-6">
+            {/* Task Input */}
+            <TaskInput onSubmit={handleTaskSubmit} />
+
+            {/* Execution Timeline */}
+            <ExecutionTimeline />
+
+            {/* Output Panel */}
+            <OutputPanel />
+          </div>
+
+          {/* Right Sidebar - Session Info */}
+          <div className="lg:col-span-3 space-y-6">
+            {/* Session Status */}
+            {sessionActive && sessionStartTime && (
+              <div className="bg-karyo-gray rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-karyo-text mb-3">
+                  Session Active
+                </h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-karyo-text-secondary">Started:</span>
+                    <span className="text-karyo-text">{sessionStartTime.toLocaleTimeString()}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-karyo-text-secondary">Duration:</span>
+                    <span className="text-karyo-text">
+                      {Math.floor((Date.now() - sessionStartTime.getTime()) / 60000)} min
+                    </span>
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Tasks */}
-              <div>
-                <h2 className="text-lg font-medium text-gray-900 mb-4">Tugas</h2>
-                <div className="space-y-4">
-                  {tasks.map((task) => (
-                    <div key={task.id} className="bg-white p-4 rounded-lg shadow">
-                      <div className="flex justify-between items-start">
-                        <div className="flex-1">
-                          <h3 className="text-lg font-medium text-gray-900">{task.title}</h3>
-                          <p className="text-gray-600 mt-1">{task.description}</p>
-                          {task.result && (
-                            <div className="mt-2 p-2 bg-gray-50 rounded text-sm">
-                              <strong>Hasil:</strong> {task.result}
-                            </div>
-                          )}
-                          <div className="flex items-center space-x-4 mt-2">
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              task.status === 'completed' ? 'bg-green-100 text-green-800' :
-                              task.status === 'running' ? 'bg-yellow-100 text-yellow-800' :
-                              task.status === 'failed' ? 'bg-red-100 text-red-800' :
-                              'bg-gray-100 text-gray-800'
-                            }`}>
-                              {task.status}
-                            </span>
-                            <span className={`px-2 py-1 rounded-full text-xs ${
-                              task.priority === 'high' ? 'bg-red-100 text-red-800' :
-                              task.priority === 'medium' ? 'bg-yellow-100 text-yellow-800' :
-                              'bg-green-100 text-green-800'
-                            }`}>
-                              {task.priority}
-                            </span>
-                            <span className="text-sm text-gray-500">
-                              Progress: {task.progress}%
-                            </span>
-                          </div>
-                          <div className="mt-2 bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                              style={{ width: `${task.progress}%` }}
-                            ></div>
-                          </div>
-                        </div>
-                        <div className="flex space-x-2">
-                          {task.status === 'pending' && (
-                            <button
-                              onClick={() => executeTask(task.id)}
-                              className="bg-green-600 text-white px-3 py-1 rounded text-sm hover:bg-green-700"
-                            >
-                              Jalankan
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {tasks.length === 0 && (
-                    <div className="text-center py-8 text-gray-500">
-                      Tidak ada tugas. Buat tugas pertama Anda di atas!
-                    </div>
-                  )}
-                </div>
+            {/* Real-time Updates */}
+            <div className="bg-karyo-gray rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-karyo-text mb-3">
+                System Events
+              </h3>
+              <div className="max-h-64 overflow-y-auto space-y-2">
+                {realTimeUpdates.slice(-8).map((update, index) => (
+                  <div key={index} className="text-sm text-karyo-text-secondary py-1 border-b border-karyo-gray-light last:border-b-0">
+                    {update}
+                  </div>
+                ))}
               </div>
             </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Real-time Updates */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Update Real-time</h3>
-                <div className="bg-white p-4 rounded-lg shadow max-h-64 overflow-y-auto">
-                  {realTimeUpdates.length === 0 ? (
-                    <p className="text-gray-500 text-sm">Belum ada update</p>
-                  ) : (
-                    realTimeUpdates.slice(-10).map((update, index) => (
-                      <div key={index} className="text-sm text-gray-600 py-1 border-b border-gray-100 last:border-b-0">
-                        {update}
+            {/* File Vault */}
+            <div className="bg-karyo-gray rounded-lg p-4">
+              <h3 className="text-lg font-semibold text-karyo-text mb-3">
+                Digital Vault
+              </h3>
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {files.length === 0 ? (
+                  <div className="text-karyo-text-secondary text-sm">No files uploaded</div>
+                ) : (
+                  files.map((file) => (
+                    <div key={file.id} className="flex items-center justify-between py-2 border-b border-karyo-gray-light last:border-b-0">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-karyo-text truncate">{file.name}</p>
+                        <p className="text-xs text-karyo-text-secondary">
+                          {(file.size / 1024).toFixed(1)} KB
+                        </p>
                       </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* File Upload */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Upload File</h3>
-                <div className="bg-white p-4 rounded-lg shadow">
-                  <input
-                    type="file"
-                    ref={fileInputRef}
-                    onChange={handleFileSelect}
-                    multiple
-                    className="hidden"
-                  />
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full bg-blue-600 text-white px-4 py-2 rounded-md hover:bg-blue-700"
-                  >
-                    Pilih File
-                  </button>
-                  <p className="text-xs text-gray-500 mt-2">
-                    Upload file untuk diproses AI
-                  </p>
-                </div>
-              </div>
-
-              {/* Files */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">File Digital Vault</h3>
-                <div className="bg-white p-4 rounded-lg shadow max-h-64 overflow-y-auto">
-                  {files.length === 0 ? (
-                    <p className="text-gray-500 text-sm">Belum ada file</p>
-                  ) : (
-                    files.map((file) => (
-                      <div key={file.id} className="flex items-center justify-between py-2 border-b border-gray-100 last:border-b-0">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">{file.name}</p>
-                          <p className="text-xs text-gray-500">
-                            {(file.size / 1024).toFixed(1)} KB • {file.type}
-                          </p>
-                        </div>
-                        <button className="text-blue-600 text-sm hover:text-blue-800">
-                          Gunakan AI
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Agents */}
-              <div>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Agen AI</h3>
-                <div className="space-y-2">
-                  {agents.map((agent) => (
-                    <div key={agent.id} className="bg-white p-3 rounded-lg shadow">
-                      <h4 className="text-sm font-medium text-gray-900">{agent.name}</h4>
-                      <p className="text-xs text-gray-600 mt-1">{agent.description}</p>
-                      <div className="flex items-center justify-between mt-2">
-                        <span className={`px-2 py-1 rounded-full text-xs ${
-                          agent.status === 'active' ? 'bg-green-100 text-green-800' :
-                          'bg-gray-100 text-gray-800'
-                        }`}>
-                          {agent.status}
-                        </span>
-                        <span className="text-xs text-gray-500">{agent.category}</span>
-                      </div>
+                      <button className="text-karyo-cyan hover:text-karyo-cyan-dark text-sm ml-2">
+                        Use with AI
+                      </button>
                     </div>
-                  ))}
-                  {agents.length === 0 && (
-                    <div className="text-center py-4 text-gray-500 text-sm">
-                      Tidak ada agen
-                    </div>
-                  )}
-                </div>
+                  ))
+                )}
               </div>
             </div>
+
+            {/* Integrations */}
+            <IntegrationPanel workspaceId={selectedWorkspace} />
+            <IntegrationTool workspaceId={selectedWorkspace} />
           </div>
         </div>
       </main>

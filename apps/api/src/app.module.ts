@@ -15,6 +15,7 @@ import { SystemModule } from './modules/system/system.module';
 import { MarketplaceModule } from './modules/marketplace/marketplace.module';
 import { ObservabilityModule } from './modules/observability/observability.module';
 import { CommandModule } from './modules/command/command.module';
+import { DataAnalystModule } from './modules/data-analyst/data-analyst.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { CommandModule } from './modules/command/command.module';
     MarketplaceModule,
     ObservabilityModule,
     CommandModule,
+    DataAnalystModule,
   ],
 })
 export class AppModule {}

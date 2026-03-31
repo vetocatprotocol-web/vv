@@ -1,3 +1,31 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  html {
+    @apply bg-karyo-dark text-karyo-text;
+  }
+
+  body {
+    @apply bg-karyo-dark text-karyo-text;
+  }
+}
+
+@layer components {
+  .karyo-card {
+    @apply bg-karyo-gray border border-karyo-gray-light rounded-lg;
+  }
+
+  .karyo-button-primary {
+    @apply bg-karyo-cyan hover:bg-karyo-cyan-dark text-karyo-dark font-medium py-2 px-4 rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl;
+  }
+
+  .karyo-button-secondary {
+    @apply bg-karyo-gray-light hover:bg-karyo-gray text-karyo-text font-medium py-2 px-4 rounded-lg transition-all duration-200;
+  }
+
+  .karyo-input {
+    @apply bg-karyo-darker border border-karyo-gray-light rounded-lg px-3 py-2 text-karyo-text placeholder-karyo-text-secondary focus:outline-none focus:ring-2 focus:ring-karyo-cyan focus:border-karyo-cyan;
+  }
+}

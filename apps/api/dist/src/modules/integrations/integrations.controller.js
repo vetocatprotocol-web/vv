@@ -23,6 +23,26 @@ let IntegrationsController = class IntegrationsController {
     async list(workspaceId, req) {
         return { data: await this.integrationsService.list(workspaceId, req.user.userId) };
     }
+    async getWorkspaceIntegrations(workspaceId, req) {
+        return { integrations: await this.integrationsService.getWorkspaceIntegrations(workspaceId, req.user.userId) };
+    }
+    async getTools(integrationId, req) {
+        return { tools: await this.integrationsService.getTools(integrationId, req.user.userId) };
+    }
+    async executeTool(integrationId, body, req) {
+        const result = await this.integrationsService.executeTool(integrationId, req.user.userId, body.tool, body.parameters);
+        return { result };
+    }
+    async configureIntegration(integrationId, body, req) {
+        return await this.integrationsService.configureIntegration(integrationId, req.user.userId, body.config);
+    }
+    async connectIntegration(body, req) {
+        const result = await this.integrationsService.connectIntegration(body.workspaceId, req.user.userId, body.type);
+        return result;
+    }
+    async disconnectIntegration(integrationId, req) {
+        return await this.integrationsService.disconnectIntegration(integrationId, req.user.userId);
+    }
     async connect(provider, workspaceId, req) {
         return { data: await this.integrationsService.connect(workspaceId, req.user.userId, provider) };
     }
@@ -46,6 +66,62 @@ __decorate([
     __metadata("design:paramtypes", [String, Object]),
     __metadata("design:returntype", Promise)
 ], IntegrationsController.prototype, "list", null);
+__decorate([
+    (0, common_1.Get)('workspace/:workspaceId'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('workspaceId')),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], IntegrationsController.prototype, "getWorkspaceIntegrations", null);
+__decorate([
+    (0, common_1.Get)(':integrationId/tools'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('integrationId')),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], IntegrationsController.prototype, "getTools", null);
+__decorate([
+    (0, common_1.Post)(':integrationId/execute'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('integrationId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], IntegrationsController.prototype, "executeTool", null);
+__decorate([
+    (0, common_1.Put)(':integrationId/configure'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('integrationId')),
+    __param(1, (0, common_1.Body)()),
+    __param(2, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object, Object]),
+    __metadata("design:returntype", Promise)
+], IntegrationsController.prototype, "configureIntegration", null);
+__decorate([
+    (0, common_1.Post)('connect'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Body)()),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, Object]),
+    __metadata("design:returntype", Promise)
+], IntegrationsController.prototype, "connectIntegration", null);
+__decorate([
+    (0, common_1.Post)(':integrationId/disconnect'),
+    (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),
+    __param(0, (0, common_1.Param)('integrationId')),
+    __param(1, (0, common_1.Request)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [String, Object]),
+    __metadata("design:returntype", Promise)
+], IntegrationsController.prototype, "disconnectIntegration", null);
 __decorate([
     (0, common_1.Post)(':provider/connect'),
     (0, common_1.UseGuards)(jwt_auth_guard_1.JwtAuthGuard),

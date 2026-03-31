@@ -1,0 +1,29 @@
+{
+  "name": "@karyo/execution",
+  "version": "1.0.0",
+  "description": "Execution Layer package for KARYO OS - handles task queuing, event-driven processing, and worker management",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "jest",
+    "lint": "eslint src/**/*.ts"
+  },
+  "dependencies": {
+    "bullmq": "^5.1.0",
+    "redis": "^4.6.0",
+    "@karyo/ai-core": "file:../ai-core",
+    "@karyo/agents": "file:../agents",
+    "@karyo/memory": "file:../memory"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.0",
+    "@types/node": "^20",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "jest": "^29",
+    "ts-jest": "^29.1.0",
+    "typescript": "^5",
+    "eslint": "^8"
+  }
+}

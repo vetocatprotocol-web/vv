@@ -5,6 +5,8 @@ exports.default = (0, drizzle_kit_1.defineConfig)({
     schema: './src/database/schema.ts',
     out: './drizzle',
     dialect: 'postgresql',
-    dbCredentials: process.env.DATABASE_URL || 'postgresql://karyo:password@localhost:5432/karyo_os',
+    dbCredentials: {
+        connectionString: process.env.DATABASE_URL || 'postgresql://karyo:password@localhost:5432/karyo_os',
+    },
 });
 //# sourceMappingURL=drizzle.config.js.map

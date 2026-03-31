@@ -18,9 +18,11 @@ const common_2 = require("@nestjs/common");
 const schema_1 = require("../../database/schema");
 const drizzle_orm_1 = require("drizzle-orm");
 const database_module_1 = require("../../database/database.module");
+const integrations_1 = require("@karyo/integrations");
 let IntegrationsService = class IntegrationsService {
     constructor(db) {
         this.db = db;
+        this.integrationManager = new integrations_1.IntegrationManager();
     }
     async ensureWorkspaceMember(workspaceId, userId) {
         const member = await this.db.select()
@@ -97,8 +99,108 @@ let IntegrationsService = class IntegrationsService {
             throw new common_1.NotFoundException('Integration not found');
         }
         await this.ensureWorkspaceMember(integration[0].workspaceId, userId);
+        await this.integrationManager.disconnectIntegration(integrationId);
         await this.db.delete(schema_1.integrations).where((0, drizzle_orm_1.eq)(schema_1.integrations.id, integrationId));
         return { message: 'Integration disconnected' };
+    }
+    async getWorkspaceIntegrations(workspaceId, userId) {
+        await this.ensureWorkspaceMember(workspaceId, userId);
+        const dbIntegrations = await this.db.select().from(schema_1.integrations)
+            .where((0, drizzle_orm_1.eq)(schema_1.integrations.workspaceId, workspaceId))
+            .orderBy((0, drizzle_orm_1.desc)(schema_1.integrations.createdAt));
+        return dbIntegrations.map(integration => ({
+            id: integration.id,
+            type: integration.provider,
+            name: `${integration.provider.charAt(0).toUpperCase() + integration.provider.slice(1)} Integration`,
+            status: integration.status,
+            lastSync: integration.lastSyncedAt,
+            config: integration.config || {}
+        }));
+    }
+    async getTools(integrationId, userId) {
+        const integration = await this.db.select().from(schema_1.integrations).where((0, drizzle_orm_1.eq)(schema_1.integrations.id, integrationId)).limit(1);
+        if (!integration[0]) {
+            throw new common_1.NotFoundException('Integration not found');
+        }
+        await this.ensureWorkspaceMember(integration[0].workspaceId, userId);
+        if (integration[0].status !== 'connected') {
+            throw new common_1.BadRequestException('Integration is not connected');
+        }
+        return this.integrationManager.getIntegrationTools(integrationId);
+    }
+    async executeTool(integrationId, userId, toolName, parameters) {
+        const integration = await this.db.select().from(schema_1.integrations).where((0, drizzle_orm_1.eq)(schema_1.integrations.id, integrationId)).limit(1);
+        if (!integration[0]) {
+            throw new common_1.NotFoundException('Integration not found');
+        }
+        await this.ensureWorkspaceMember(integration[0].workspaceId, userId);
+        if (integration[0].status !== 'connected') {
+            throw new common_1.BadRequestException('Integration is not connected');
+        }
+        return this.integrationManager.executeTool(integrationId, toolName, parameters);
+    }
+    async configureIntegration(integrationId, userId, config) {
+        const integration = await this.db.select().from(schema_1.integrations).where((0, drizzle_orm_1.eq)(schema_1.integrations.id, integrationId)).limit(1);
+        if (!integration[0]) {
+            throw new common_1.NotFoundException('Integration not found');
+        }
+        await this.ensureWorkspaceMember(integration[0].workspaceId, userId);
+        const updated = await this.db.update(schema_1.integrations).set({
+            config: { ...integration[0].config, ...config },
+            updatedAt: new Date(),
+        }).where((0, drizzle_orm_1.eq)(schema_1.integrations.id, integrationId)).returning();
+        return updated[0];
+    }
+    async connectIntegration(workspaceId, userId, type) {
+        await this.ensureWorkspaceMember(workspaceId, userId);
+        const existing = await this.db.select().from(schema_1.integrations)
+            .where((0, drizzle_orm_1.and)((0, drizzle_orm_1.eq)(schema_1.integrations.workspaceId, workspaceId), (0, drizzle_orm_1.eq)(schema_1.integrations.provider, type)))
+            .limit(1);
+        if (existing[0]) {
+            if (existing[0].status === 'connected') {
+                throw new common_1.BadRequestException('Integration already connected');
+            }
+            return {
+                authUrl: this.getAuthUrl(type),
+                integrationId: existing[0].id
+            };
+        }
+        const newIntegration = await this.db.insert(schema_1.integrations).values({
+            workspaceId,
+            provider: type,
+            status: 'disconnected',
+            syncStatus: 'disconnected',
+            config: {}
+        }).returning();
+        return {
+            authUrl: this.getAuthUrl(type),
+            integrationId: newIntegration[0].id
+        };
+    }
+    async disconnectIntegration(integrationId, userId) {
+        const integration = await this.db.select().from(schema_1.integrations).where((0, drizzle_orm_1.eq)(schema_1.integrations.id, integrationId)).limit(1);
+        if (!integration[0]) {
+            throw new common_1.NotFoundException('Integration not found');
+        }
+        await this.ensureWorkspaceMember(integration[0].workspaceId, userId);
+        await this.integrationManager.disconnectIntegration(integrationId);
+        await this.db.update(schema_1.integrations).set({
+            status: 'disconnected',
+            syncStatus: 'disconnected',
+            accessToken: null,
+            refreshToken: null,
+            updatedAt: new Date(),
+        }).where((0, drizzle_orm_1.eq)(schema_1.integrations.id, integrationId));
+        return { message: 'Integration disconnected successfully' };
+    }
+    getAuthUrl(type) {
+        const authUrls = {
+            'google-drive': 'https://accounts.google.com/oauth/authorize?client_id=fake-client-id&scope=https://www.googleapis.com/auth/drive&response_type=code',
+            'gmail': 'https://accounts.google.com/oauth/authorize?client_id=fake-client-id&scope=https://www.googleapis.com/auth/gmail.readonly&response_type=code',
+            'slack': 'https://slack.com/oauth/authorize?client_id=fake-client-id&scope=channels:read,chat:write&response_type=code',
+            'custom-api': null
+        };
+        return authUrls[type] || null;
     }
 };
 exports.IntegrationsService = IntegrationsService;
