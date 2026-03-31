@@ -1,15 +1,33 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
-import { io, Socket } from 'socket.io-client';
-import TaskInput from '@/components/ai/TaskInput';
-import ExecutionTimeline from '@/components/ai/ExecutionTimeline';
-import AIControlPanel from '@/components/ai/AIControlPanel';
-import AgentStatus from '@/components/ai/AgentStatus';
-import OutputPanel from '@/components/ai/OutputPanel';
-import { IntegrationPanel, IntegrationTool } from '@/components/integrations';
-import { useAIWorkspace } from '@/lib/store';
+import { useState, useEffect } from 'react';
+import {
+  LayoutDashboard,
+  CheckSquare,
+  Bot,
+  FileText,
+  Building2,
+  BarChart3,
+  Settings,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  Bell,
+  Search,
+  Plus,
+  Download,
+  Upload,
+  Loader2,
+  Activity,
+  Database
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Progress } from '@/components/ui/progress';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 
 interface Task {
   id: string;
@@ -27,6 +45,7 @@ interface Workspace {
   id: string;
   name: string;
   role: string;
+  avatar?: string;
 }
 
 interface Agent {
@@ -37,6 +56,7 @@ interface Agent {
   status: string;
   category: string;
   createdAt: string;
+  avatar?: string;
 }
 
 interface File {
@@ -47,234 +67,461 @@ interface File {
   uploadedAt: string;
 }
 
+interface SystemMetrics {
+  activeTasks: number;
+  totalAgents: number;
+  dataProcessed: number;
+  uptime: number;
+  costToday: number;
+}
+
 export default function Dashboard() {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [files, setFiles] = useState<File[]>([]);
-  const [selectedWorkspace, setSelectedWorkspace] = useState<string>('');
-  const [loading, setLoading] = useState(true);
-  const [sessionActive, setSessionActive] = useState(false);
-  const [sessionStartTime, setSessionStartTime] = useState<Date | null>(null);
-  const [realTimeUpdates, setRealTimeUpdates] = useState<string[]>([]);
-  const socketRef = useRef<Socket | null>(null);
-  const router = useRouter();
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
+  const [metrics, setMetrics] = useState<SystemMetrics>({
+    activeTasks: 0,
+    totalAgents: 0,
+    dataProcessed: 0,
+    uptime: 0,
+    costToday: 0,
+  });
 
-  // AI Workspace store
-  const {
-    addExecutionStep,
-    updateExecutionStep,
-    completeExecution,
-    failExecution,
-    updateAgent,
-    addCost,
-    addResult,
-    currentTask
-  } = useAIWorkspace();
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) {
-      router.push('/login');
-      return;
-    }
+    // Initialize data
+    const loadDashboardData = async () => {
+      try {
+        // Load tasks
+        const tasksResponse = await fetch('/api/tasks');
+        if (tasksResponse.ok) {
+          const tasksData = await tasksResponse.json();
+          setTasks(tasksData);
+        }
 
-    // Initialize Socket.IO connection
-    socketRef.current = io('http://localhost:3001', {
-      auth: { token },
-      transports: ['websocket', 'polling']
-    });
+        // Load agents
+        const agentsResponse = await fetch('/api/agents');
+        if (agentsResponse.ok) {
+          const agentsData = await agentsResponse.json();
+          setAgents(agentsData);
+        }
 
-    socketRef.current.on('connect', () => {
-      console.log('Connected to server');
-      setRealTimeUpdates(prev => [...prev, 'Connected to real-time updates']);
-    });
+        // Load files
+        const filesResponse = await fetch('/api/files');
+        if (filesResponse.ok) {
+          const filesData = await filesResponse.json();
+          setFiles(filesData);
+        }
 
-    socketRef.current.on('disconnect', () => {
-      console.log('Disconnected from server');
-      setRealTimeUpdates(prev => [...prev, 'Disconnected from real-time updates']);
-    });
+        // Load workspaces
+        const workspacesResponse = await fetch('/api/workspaces');
+        if (workspacesResponse.ok) {
+          const workspacesData = await workspacesResponse.json();
+          setWorkspaces(workspacesData);
+        }
 
-    socketRef.current.on('taskStatusChanged', (data) => {
-      console.log('Task status changed:', data);
-      setRealTimeUpdates(prev => [...prev, `Task "${data.title}" status: ${data.status} (${data.progress}%)`]);
-
-      // Update AI workspace state
-      if (data.status === 'running') {
-        addExecutionStep({
-          title: 'Task Execution',
-          description: `Executing: ${data.title}`,
-          status: 'running',
-        });
-      } else if (data.status === 'completed') {
-        updateExecutionStep('step-1', { status: 'completed', output: data.result });
-        completeExecution(data.result ? {
-          id: `result-${Date.now()}`,
-          content: data.result,
-          type: 'text',
-          timestamp: new Date(),
-        } : undefined);
-      }
-    });
-
-    socketRef.current.on('agentStatusChanged', (data) => {
-      console.log('Agent status changed:', data);
-      setRealTimeUpdates(prev => [...prev, `Agent "${data.name}" status: ${data.status}`]);
-
-      // Update agent status in AI workspace
-      updateAgent(data.id, { status: data.status });
-    });
-
-    fetchWorkspaces();
-    fetchAgents();
-    fetchFiles();
-    startSession();
-
-    return () => {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
+        // Load metrics
+        const metricsResponse = await fetch('/api/metrics');
+        if (metricsResponse.ok) {
+          const metricsData = await metricsResponse.json();
+          setMetrics(metricsData);
+        }
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error);
+      } finally {
+        setIsLoading(false);
       }
     };
+
+    loadDashboardData();
   }, []);
 
-  const fetchWorkspaces = async () => {
-    try {
-      const response = await fetch('http://localhost:3001/api/v1/workspaces/my', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      const data = await response.json();
-      setWorkspaces(data);
-      if (data.length > 0) {
-        setSelectedWorkspace(data[0].id);
-      }
-    } catch (error) {
-      console.error('Error fetching workspaces:', error);
-    }
-  };
+  const navigation = [
+    { name: 'Overview', id: 'overview', icon: LayoutDashboard, current: activeTab === 'overview' },
+    { name: 'Tasks', id: 'tasks', icon: CheckSquare, current: activeTab === 'tasks' },
+    { name: 'Agents', id: 'agents', icon: Bot, current: activeTab === 'agents' },
+    { name: 'Files', id: 'files', icon: FileText, current: activeTab === 'files' },
+    { name: 'Workspaces', id: 'workspaces', icon: Building2, current: activeTab === 'workspaces' },
+    { name: 'Analytics', id: 'analytics', icon: BarChart3, current: activeTab === 'analytics' },
+    { name: 'Settings', id: 'settings', icon: Settings, current: activeTab === 'settings' },
+  ];
 
-  const fetchAgents = async () => {
-    try {
-      const response = await fetch('http://localhost:3001/api/v1/agents', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      const data = await response.json();
-      setAgents(data);
-    } catch (error) {
-      console.error('Error fetching agents:', error);
-    }
-  };
+  const renderOverview = () => (
+    <div className="space-y-6">
+      {/* Welcome Section */}
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg p-6 text-white">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Welcome back!</h1>
+            <p className="text-blue-100 mt-1">Here's what's happening with your AI workspace today.</p>
+          </div>
+          <div className="hidden md:block">
+            <Sparkles className="h-12 w-12 text-blue-200" />
+          </div>
+        </div>
+      </div>
 
-  const fetchFiles = async () => {
-    try {
-      const response = await fetch('http://localhost:3001/api/v1/files', {
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-      const data = await response.json();
-      setFiles(data);
-    } catch (error) {
-      console.error('Error fetching files:', error);
-    }
-  };
+      {/* Metrics Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Tasks</CardTitle>
+            <CheckSquare className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.activeTasks}</div>
+            <p className="text-xs text-muted-foreground">
+              +12% from last week
+            </p>
+          </CardContent>
+        </Card>
 
-  const startSession = () => {
-    setSessionActive(true);
-    setSessionStartTime(new Date());
-    setRealTimeUpdates(prev => [...prev, 'AI Workspace session started']);
-  };
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Agents</CardTitle>
+            <Bot className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.totalAgents}</div>
+            <p className="text-xs text-muted-foreground">
+              +2 new this month
+            </p>
+          </CardContent>
+        </Card>
 
-  const endSession = () => {
-    setSessionActive(false);
-    setSessionStartTime(null);
-    setRealTimeUpdates(prev => [...prev, 'AI Workspace session ended']);
-  };
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Data Processed</CardTitle>
+            <Database className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.dataProcessed}GB</div>
+            <p className="text-xs text-muted-foreground">
+              +8% from yesterday
+            </p>
+          </CardContent>
+        </Card>
 
-  const handleTaskSubmit = async (command: string, mode: string, goal?: string, data?: string) => {
-    try {
-      // Simulate AI processing steps
-      addExecutionStep({
-        title: 'Command Analysis',
-        description: 'Analyzing your request and determining execution strategy',
-        status: 'running',
-      });
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">System Uptime</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{metrics.uptime}%</div>
+            <p className="text-xs text-muted-foreground">
+              99.9% this month
+            </p>
+          </CardContent>
+        </Card>
+      </div>
 
-      setTimeout(() => {
-        updateExecutionStep('step-1', { status: 'completed' });
-        addExecutionStep({
-          title: 'Agent Assignment',
-          description: `Assigning ${mode} mode execution`,
-          status: 'running',
-        });
-      }, 1000);
+      {/* Recent Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Tasks</CardTitle>
+            <CardDescription>Your latest task executions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-4">
+                {tasks.slice(0, 5).map((task) => (
+                  <div key={task.id} className="flex items-center space-x-4">
+                    <div className="flex-shrink-0">
+                      <div className={`w-2 h-2 rounded-full ${
+                        task.status === 'completed' ? 'bg-green-500' :
+                        task.status === 'running' ? 'bg-blue-500' :
+                        task.status === 'failed' ? 'bg-red-500' : 'bg-gray-500'
+                      }`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{task.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(task.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <Badge variant={
+                      task.status === 'completed' ? 'default' :
+                      task.status === 'running' ? 'secondary' :
+                      task.status === 'failed' ? 'destructive' : 'outline'
+                    }>
+                      {task.status}
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
 
-      setTimeout(() => {
-        updateExecutionStep('step-2', { status: 'completed' });
-        addExecutionStep({
-          title: 'Task Execution',
-          description: 'Executing your request with AI assistance',
-          status: 'running',
-        });
-      }, 2000);
+        <Card>
+          <CardHeader>
+            <CardTitle>Active Agents</CardTitle>
+            <CardDescription>Currently running AI agents</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ScrollArea className="h-[300px]">
+              <div className="space-y-4">
+                {agents.filter(agent => agent.status === 'active').slice(0, 5).map((agent) => (
+                  <div key={agent.id} className="flex items-center space-x-4">
+                    <Avatar className="h-8 w-8">
+                      <AvatarImage src={agent.avatar} />
+                      <AvatarFallback>
+                        <Bot className="h-4 w-4" />
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{agent.name}</p>
+                      <p className="text-xs text-muted-foreground">{agent.type}</p>
+                    </div>
+                    <Badge variant="secondary">{agent.category}</Badge>
+                  </div>
+                ))}
+              </div>
+            </ScrollArea>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 
-      // Simulate API call
-      const response = await fetch('http://localhost:3001/api/v1/command/interpret', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          command,
-          workspaceId: selectedWorkspace,
-          mode,
-          goal,
-          data,
-        }),
-      });
+  const renderTasks = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Tasks</h2>
+          <p className="text-muted-foreground">Manage and monitor your AI tasks</p>
+        </div>
+        <Button>
+          <Plus className="h-4 w-4 mr-2" />
+          New Task
+        </Button>
+      </div>
 
-      const result = await response.json();
+      <Card>
+        <CardHeader>
+          <CardTitle>All Tasks</CardTitle>
+          <CardDescription>A list of all your tasks and their current status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[600px]">
+            <div className="space-y-4">
+              {tasks.map((task) => (
+                <div key={task.id} className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="font-medium">{task.title}</h3>
+                    <Badge variant={
+                      task.status === 'completed' ? 'default' :
+                      task.status === 'running' ? 'secondary' :
+                      task.status === 'failed' ? 'destructive' : 'outline'
+                    }>
+                      {task.status}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">{task.description}</p>
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{task.type}</span>
+                    <span>{new Date(task.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  {task.status === 'running' && (
+                    <Progress value={task.progress} className="mt-3" />
+                  )}
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+    </div>
+  );
 
-      if (response.ok) {
-        // Complete execution
-        updateExecutionStep('step-3', {
-          status: 'completed',
-          output: `Task completed successfully: ${result.message || 'Done'}`
-        });
+  const renderAgents = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Agents</h2>
+          <p className="text-muted-foreground">Manage your AI agents and their capabilities</p>
+        </div>
+        <Button>
+          <Plus className="h-4 w-4 mr-2" />
+          New Agent
+        </Button>
+      </div>
 
-        completeExecution({
-          id: `result-${Date.now()}`,
-          content: result.result || `Successfully executed: ${command}`,
-          type: 'text',
-          timestamp: new Date(),
-          metadata: { mode, goal, data }
-        });
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {agents.map((agent) => (
+          <Card key={agent.id}>
+            <CardHeader>
+              <div className="flex items-center space-x-4">
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src={agent.avatar} />
+                  <AvatarFallback>
+                    <Bot className="h-6 w-6" />
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <CardTitle className="text-lg">{agent.name}</CardTitle>
+                  <CardDescription>{agent.type}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">{agent.description}</p>
+              <div className="flex items-center justify-between">
+                <Badge variant="secondary">{agent.category}</Badge>
+                <Badge variant={
+                  agent.status === 'active' ? 'default' :
+                  agent.status === 'inactive' ? 'secondary' : 'outline'
+                }>
+                  {agent.status}
+                </Badge>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
 
-        addCost(0.0025); // Simulate cost
-      } else {
-        failExecution(result.message || 'Task execution failed');
-      }
-    } catch (error) {
-      console.error('Error executing task:', error);
-      failExecution('Network error occurred');
-    }
-  };
+  const renderFiles = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Files</h2>
+          <p className="text-muted-foreground">Manage your uploaded files and documents</p>
+        </div>
+        <Button>
+          <Upload className="h-4 w-4 mr-2" />
+          Upload File
+        </Button>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>All Files</CardTitle>
+          <CardDescription>Your uploaded files and their details</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ScrollArea className="h-[600px]">
+            <div className="space-y-4">
+              {files.map((file) => (
+                <div key={file.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex items-center space-x-4">
+                    <FileText className="h-8 w-8 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium">{file.name}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {(file.size / 1024 / 1024).toFixed(2)} MB • {file.type}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="text-sm text-muted-foreground">
+                      {new Date(file.uploadedAt).toLocaleDateString()}
+                    </span>
+                    <Button variant="ghost" size="sm">
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  const renderWorkspaces = () => (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">Workspaces</h2>
+          <p className="text-muted-foreground">Manage your collaborative workspaces</p>
+        </div>
+        <Button>
+          <Plus className="h-4 w-4 mr-2" />
+          New Workspace
+        </Button>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {workspaces.map((workspace) => (
+          <Card key={workspace.id}>
+            <CardHeader>
+              <div className="flex items-center space-x-4">
+                <Avatar className="h-12 w-12">
+                  <AvatarImage src={workspace.avatar} />
+                  <AvatarFallback>
+                    <Building2 className="h-6 w-6" />
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <CardTitle className="text-lg">{workspace.name}</CardTitle>
+                  <CardDescription>{workspace.role}</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button className="w-full" variant="outline">
+                Open Workspace
+              </Button>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderAnalytics = () => (
+    <div className="space-y-6">
+      <div>
+        <h2 className="text-2xl font-bold">Analytics</h2>
+        <p className="text-muted-foreground">Insights into your AI workspace performance</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Usage Over Time</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              Chart placeholder - Usage analytics
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Cost Breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[300px] flex items-center justify-center text-muted-foreground">
+              Chart placeholder - Cost analytics
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
 
   const logout = () => {
     localStorage.removeItem('token');
     router.push('/');
   };
 
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="min-h-screen bg-karyo-dark flex items-center justify-center">
+      <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-pulse-cyan text-6xl mb-4">🚀</div>
-          <div className="text-karyo-cyan text-xl font-semibold">Initializing KARYO OS</div>
-          <div className="text-karyo-text-secondary mt-2">Loading AI Workspace...</div>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+          <p className="text-muted-foreground">Loading dashboard...</p>
         </div>
       </div>
     );
